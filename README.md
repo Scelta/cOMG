@@ -35,28 +35,11 @@ options:
         -v|version      :show version and author info.
 ```
 
-**path file**: 用于记录raw data文件位置和id信息的文件，每行三列分别记录下**样本编号**, **数据编号** 和 **fq文件路径**。
-
-- `样本编号`：生物学，统计学意义上的样本个体，用于后续分析的基本个体。
-
-  > :warning: 在相对丰度计算步骤中，相同`样本编号`的数据会合并计算到一个结果文件中，并以`样本编号`作为结果文件前缀；
-  >
-  > :warning: pe模式中，来自同一个样本的\*1.fq和\*2.fq应使用相同的`样本编号`。
-  >
-  > :warning: 请避免以数字开头
-
-- `数据编号`：如果同一个样本进行多次测序，则会产生多个数据，此时需要用数据编号来区分（可以使文库号，日期，批次，等等）。
-
-  > :warning: 拥有相同`数据编号`的多个数据会被认为来自同一批次；
-  >
-  > ⚠  前三步骤的结果文件均以`数据编号`作为前缀；
-  > ⚠ pe模式中，来自同一个数据的\*1.fq和\*2.fq应使用相同的`数据编号`
-  >
-  > :warning: 请避免以数字开头
-
-- `fastq路径`: 必须是工作环境可以访问到的路径位置
-
-  > :warning: 请按 read1，read2，single read（若有）的顺序排列每个数据的输入数据路径
+**path file**: used for record path location of raw data. Needs 3 columns:
+1. *SampleID* : biological sample ID, generally the subject used in your study. Note: DO NOT start with numbers.
+2. *SeqdataID*: Sequence data ID. Make sure it's unique in this batch run. Note: DO NOT start with numbers.
+3. *SeqdataPath*: Sequence data ABSOLUTELY path location. For pair-end data, put `read1` and `read2` in 2 tandem lines , with same *SampleID* and *SeqdataID*.  
+Note: For one sample sequenced multiple times, provide them with the same *sampleID* so they will be summed together in relative abundance calculation step.
 
 e.g:
 
@@ -76,55 +59,63 @@ t05        ERR260136  ./fastq/ERR260136_2.fastq.gz
 
 
 
-**config file**: 由于流程涉及到的分析步骤较多，对于每个具体工具的参数定义，统一放在配置文件中进行处理：
+**config file** example:
 
 ```
 ###### configuration
 
 ### Database location
-db_host = $META_DB/human/hg19/Hg19.fa.index	#宿主参考基因集db前缀，用于去除宿主来源的reads
-db_meta = $META_DB/1267sample_ICG_db/4Group_uniqGene.div_1.fa.index,$META_DB/1267sample_ICG_db/4Group_uniqGene.div_2.fa.index #参考基因集db前缀，多套索引可以用逗号分隔
+db_host = $META_DB/human/hg19/Hg19.fa.index	# Prefix of host genome SOAP2 database
+db_meta = $META_DB/1267sample_ICG_db/4Group_uniqGene.div_1.fa.index,$META_DB/1267sample_ICG_db/4Group_uniqGene.div_2.fa.index # Prefix of metagenomics gene set SOAP2 database. Use comma for multiple databases.
 
 ### reference gene length file
-RGL  = $META_DB/IGC.annotation/IGC_9.9M_update.fa.len #与参考基因集匹配的每个基因的长度信息，用于计算相对丰度
+RGL  = $META_DB/IGC.annotation/IGC_9.9M_update.fa.len # Geneset length info mation. 3 columns needed. See below*.
 ### pipeline parameters
 PhQ = 33        		# reads Phred Quality system: 33 or 64.
-mLen= 30                # minimal read length allowance
-seedOA=0.9			    # OA过滤方法中，对种子部分的OA阈值（准确率） [0,1]
-fragOA=0.8				# OA过滤方法中，对截取全长的OA阈值（准确率） [0,1]
+mLen= 30        		# minimal read length allowance
+seedOA=0.9			    # OA methd. Quality cutoff for seed [0,1]
+fragOA=0.8				  # OA methd. Quality cutoff for retained fragment [0,1]
 
-qsub = 1234             #Following argment will enable only if qusb=on, otherwise you could commit it
-q   = st.q              #queue for qsub
-P   = st_ms             #Project id for qsub
-B   = 1					#全局设定投递任务的备份数
-B1  = 3					#针对第一步的任务投递备份数
-p   = 6                 #全局计算核心数
-p1  = 1					#具体到第一步的计算核心数，该参数比全局设定优先级高
-p4  = 1					#具体到第四步的计算核心数，该参数比全局设定优先级高
-f1  = 0.5G              #virtual free for qsub in step 1 (trim & filter)
-f2  = 6G                #virtual free for qsub in step 2 (remove host genes)
-f3  = 14G               #virtual free for qsub in step 3 (aligned to gene set)
-f4  = 8G                #virtual free for qsub in step 4 (calculate soap results to abundance)
-s   = 120				#qusbM定时检查任务完成情况的时间间隔（秒）
-r   = 10                #repeat time when job failed or interrupted
+qsub = 1234             # Following argment will enable only if qusb=on, otherwise you could commit it
+q   = st.q              # queue id or group id (if PBS enabled) for qsub
+P   = st_ms             # Project id for qsub
+B   = 1					        # Global setting of backup tasks number.
+B1  = 3					        # Backup tasks number specific for step 1.
+p   = 6                 # Global setting of cpu numbers for each step.
+p1  = 1					        # cpu numbers for step 1 (Quality-control)
+p4  = 1					        # cpu numbers for step 4 (Abundance calculation)
+f1  = 0.5G              # virtual free for qsub in step 1 (trim & filter)
+f2  = 6G                # virtual free for qsub in step 2 (remove host genes)
+f3  = 14G               # virtual free for qsub in step 3 (aligned to gene set)
+f4  = 8G                # virtual free for qsub in step 4 (calculate soap results to abundance)
+s   = 120				        # For qusbM. Time interval to check job status.
+r   = 10                # Repeat time when job failed or interrupted
+
+#### Denmark National Computerome 2.0 PBS parameters. See https://www.computerome.dk
+PBS = 0                 #PBS support. [0] to turn off, [1] to turn on
+walltime=7:00:00:00     #Requesting time - format is <days>:<hours>:<minutes>:<seconds> (here, 7 days)
+
 ```
+* Geneset length info content:
+1. Gene ID corresponding to the Geneset in `db_meta`.  
+2. Gene Name.  
+3. Gene length. For adjusting the calculation of relative abundance.  
 
-上述配置文件准备完毕后，运行本脚本可以生成工作目录：
-
+After prepared above **configure** and **path file**. The workshop can be initiated. Command example:
 ```
 cd t
 cOMG se -p demo.input.lst -c demo.cfg -o demo.test
 ```
 
-随后进入工作目录，检查脚本无误后可以启动执行脚本：
-
+Before actually run or submit your task, finall Chcek the generated scripts.
+I provide several strategy to run. Choose one of them. DO NOT run all! They will executing the same low-level scripts.
 ```
-sh RUN.batch.sh			# 模式一，全部样本完成当前步骤后才会进入下一步骤；
-sh RUN.linear.1234.sh	# 模式二，每个样本依次运行每个步骤，相互不影响；
-sh RUN.qsubM.sh			# 模式三，同上，采用改进的qsub管理脚本，可自动处理异常情况（推荐）
+sh RUN.batch.sh			  # Mode 1: Next step will start only When all samples' previous step done.
+sh RUN.linear.1234.sh	# Mode 2: Each sample run parallel. Also available for qsub submit in Denmark National Computerome HPC.
+sh RUN.qsubM.sh			  # Mode 3: For qsub in BGI HPC, monitor tasks by qsubM, a self-developed qusb task manager.
 ```
 
-完成后可以执行`sh report.stat.sh`打印报告表格。
+After finished, run `sh report.stat.sh` to print a report table.
 
-若中途出现错误，可以进入`script`目录对个别脚本进行调试。
-
+### Feedback
+Issue report is welcome. 
