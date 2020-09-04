@@ -45,7 +45,7 @@ if ($pattern eq "cmd"){
 	print "Available util commands:\n";
 	system("ls --color $Bin/util");
 	exit;
-} 
+}
 if ($pattern !~ /^(pe|se|config|-v|-h)$/){
 	my $path = ( -e "$Bin/bin/$pattern")?"$Bin/bin":( -e "$Bin/util/$pattern")?"$Bin/util":"No such script!.";
     my $int = ($pattern=~/\.pl$/)?'perl ':($pattern=~/\.[Rr]$/)?'Rscript ':'';
@@ -75,6 +75,7 @@ print &usage && exit if ( (!defined $path_f)||(defined $help) );
 # ####################
 # initialize variables
 # ####################
+our $PBSHEADER;
 $step    ||= "1234";
 $out_dir ||= $cwd; $out_dir = abs_path($out_dir);
 my $monitor_tag = basename($out_dir);
@@ -173,14 +174,36 @@ open B2,">$dir_s/batch.rmhost.sh";
 open B3,">$dir_s/batch.soap.sh";
 open B4,">$dir_s/batch.abun.sh";
 ###############################
+# Add a section to enable PBS for Denmark computerome 2.0 HPC
+if($CFG{"PBS"}){
+	open PBS,"< $Bin/util/template.PBS.header.sh" or die "Cannot find PBS header file. ".$! ;
+	$PBSHEADER = join("",<PBS>);
+	close PBS;
+	# set parameters
+	$PBSHEADER =~ s/<groupID>/$CFG{'q'}/g;
+	$PBSHEADER =~ s/<maxppn>/$CFG{'p'}/g;
+	$PBSHEADER =~ s/<maxmem>/$CFG{'f3'}/g;
+	$PBSHEADER =~ s/<walltime>/$CFG{'walltime'}/g;
+}
+###############################
 foreach my $sam (sort keys %SAM){ # operation on sample level
 	### Write main batch scripts first.
-	print C2 "sh $dir_sS/$sam.$step.sh \&\n";
 	open LINE,"> $dir_sS/$sam.$step.sh";
+	if($CFG{"PBS"}){
+		my $SAMHEADER = $PBSHEADER;
+		$SAMHEADER =~ s/<jobName>/$sam/g;
+		$SAMHEADER =~ s/<out.err>/$dir_sS\/$sam.$step.err/;
+		$SAMHEADER =~ s/<out.log>/$dir_sS\/$sam.$step.log/;
+
+		print LINE $SAMHEADER;
+		print C2 "qsub $dir_sS/$sam.$step.sh\n";
+	}else{
+		print C2 "sh $dir_sS/$sam.$step.sh \&\n";
+	}
 	if ($step =~ /1/){
 		open SSC,">$dir_sS/$sam.clean.sh";
-        $CFG{'p1'} ||= $CFG{'p'};
-		if($CFG{'qsub'} =~ /on|1/){
+    $CFG{'p1'} ||= $CFG{'p'};
+		if($CFG{'qsub'} =~ /on|1/ && not $CFG{"PBS"}){
 			$CFG{'f1'} ||= $CFG{'f'};
 			print LINE &qsub($CFG{'f1'}, $CFG{'p1'}, $CFG{'q'}, $CFG{'P'}, "$dir_sS/$sam.clean.sh");
 		}else{
@@ -189,8 +212,8 @@ foreach my $sam (sort keys %SAM){ # operation on sample level
 	}
 	if ($step =~ /2/){
 		open SSR,">$dir_sS/$sam.rmhost.sh";
-        $CFG{'p2'} ||= $CFG{'p'};
-		if($CFG{'qsub'}  =~ /on|2/){
+    $CFG{'p2'} ||= $CFG{'p'};
+		if($CFG{'qsub'}  =~ /on|2/ && not $CFG{"PBS"}){
 			$CFG{'f2'} ||= $CFG{'f'};
 			print LINE &qsub($CFG{'f2'}, $CFG{'p2'}, $CFG{'q'}, $CFG{'P'}, "$dir_sS/$sam.rmhost.sh");
 		}else{
@@ -200,21 +223,21 @@ foreach my $sam (sort keys %SAM){ # operation on sample level
 	if ($step =~ /3/){
 		open SSS,">$dir_sS/$sam.soap.sh";
 		open LIST,">$dir_sp/$sam.soap.list";
-        $CFG{'p3'} ||= $CFG{'p'};
-		if($CFG{'qsub'}  =~ /on|3/){
+    $CFG{'p3'} ||= $CFG{'p'};
+		if($CFG{'qsub'}  =~ /on|3/ && not $CFG{"PBS"}){
 			$CFG{'f3'} ||= $CFG{'f'};
 			print LINE &qsub($CFG{'f3'}, $CFG{'p3'}, $CFG{'q'}, $CFG{'P'}, "$dir_sS/$sam.soap.sh");
 		}else{
-	        print LINE "sh $dir_sS/$sam.soap.sh\n";
+	    print LINE "sh $dir_sS/$sam.soap.sh\n";
 		}
 	}
 	if ($step =~ /4/){
-        $CFG{'p4'} ||= $CFG{'p'};
-		if($CFG{'qsub'}  =~ /on|4/){
+    $CFG{'p4'} ||= $CFG{'p'};
+		if($CFG{'qsub'}  =~ /on|4/ && not $CFG{"PBS"}){
 			$CFG{'f4'} ||= $CFG{'f'};
 			print LINE &qsub($CFG{'f4'}, $CFG{'p4'}, $CFG{'q'}, $CFG{'P'}, "$dir_sS/$sam.abun.sh");
 		}else{
-	        print LINE "sh $dir_sS/$sam.abun.sh\n";
+	    print LINE "sh $dir_sS/$sam.abun.sh\n";
 		}
 		print B4 "sh $dir_sS/$sam.abun.sh\n";
 	}
