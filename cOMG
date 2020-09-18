@@ -139,10 +139,10 @@ while(@paths>0){
 	$path_i = abs_path($path_i);
 	open IN,"<$path_i" or die "can not open $path_i, $!\n";
 	while (<IN>){
-		print PATH $_ ;
 		chomp;
 		my @a = split;
-        $a[2] = abs_path($a[2]);
+		chomp($a[2] = abs_path(`echo $a[2]`));
+		print PATH join("\t",@a)."\n";
 		my ($sam,$pfx,$path) = @a;
 		push @{$SAM{$sam}{$pfx}}, $path;
 	}
